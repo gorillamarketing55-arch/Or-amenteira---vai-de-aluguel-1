@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vai de Aluguel — Gestão de Orçamentos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'Inter', 'sans-serif']
+                    },
+                    colors: {
+                        vdaBlue: '#055b75',
+                        vdaOrange: '#ff5722'
+                    }
+                }
+            }
+        };
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: #f8fafc;
+        }
+
+        .scrollbar-none::-webkit-scrollbar {
+            display: none;
+        }
+
+        .scrollbar-none {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            body {
+                background-color: #ffffff !important;
+            }
+        }
+    </style>
+</head>
+<body class="text-slate-800 antialiased pb-16">
+
+    <!-- Faixa superior limpa exibindo apenas o nome da marca -->
+    <header class="bg-vdaBlue text-white shadow-md sticky top-0 z-40 no-print">
+        <div class="max-w-6xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-3">
+            <div class="flex items-center gap-3">
+                <span class="text-2xl sm:text-3xl font-extrabold tracking-tight">Vai de Aluguel</span>
+            </div>
+
+            <div class="flex items-center gap-2 sm:gap-3">
+                <span id="header-quote-code" class="text-xs font-extrabold bg-white/15 px-3 py-1.5 rounded-full">
+                    #VDA-0001
+                </span>
+                <button
+                    type="button"
+                    onclick="openResetModal()"
+                    class="px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                >
+                    <i class="fa-solid fa-rotate-left"></i>
+                    <span>Novo / Limpar</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra de navegação nas 5 abas na ordem solicitada -->
+        <nav class="max-w-6xl mx-auto px-4 flex overflow-x-auto gap-2 border-t border-white/15 pt-2 pb-1 scrollbar-none">
+            <button
+                type="button"
+                id="nav-btn-quote"
+                onclick="switchTab('quote')"
+                class="nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap bg-white text-vdaBlue"
+            >
+                1. Orçamento
+            </button>
+            <button
+                type="button"
+                id="nav-btn-freight"
+                onclick="switchTab('freight')"
+                class="nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap hover:bg-white/10 text-white"
+            >
+                2. Frete
+            </button>
+            <button
+                type="button"
+                id="nav-btn-services"
+                onclick="switchTab('services')"
+                class="nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap hover:bg-white/10 text-white"
+            >
+                3. Montagem
+            </button>
+            <button
+                type="button"
+                id="nav-btn-catalog"
+                onclick="switchTab('catalog')"
+                class="nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap hover:bg-white/10 text-white"
+            >
+                4. Catálogo
+            </button>
+            <button
+                type="button"
+                id="nav-btn-history"
+                onclick="switchTab('history')"
+                class="nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap hover:bg-white/10 text-white"
+            >
+                5. Histórico
+            </button>
+        </nav>
+    </header>
+
+    <!-- Notificação visual no topo sem uso de alert() -->
+    <div id="toast-banner" class="fixed top-20 right-4 z-50 hidden max-w-sm bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl border border-slate-700 items-center gap-3 no-print">
+        <i class="fa-solid fa-circle-check text-emerald-400 text-base shrink-0"></i>
+        <span id="toast-message" class="text-xs sm:text-sm font-semibold"></span>
+    </div>
+
+    <main class="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+        <!-- ABA 1: ORÇAMENTO (DADOS DO CLIENTE + ATALHOS FRETE/MONTAGEM + RESUMO) -->
+        <section id="tab-quote" class="tab-section space-y-6">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div class="flex flex-wrap items-center gap-4">
+                        <!-- Logo oficial Vai de Aluguel adaptado ao cabeçalho do Orçamento -->
+                        <div class="bg-[#fafafa] border border-slate-200/90 rounded-2xl px-3.5 py-2.5 shadow-xs shrink-0 flex items-center justify-center">
+                            <svg id="vda-brand-logo-svg" viewBox="0 0 340 215" class="w-32 sm:w-40 h-auto select-none" role="img" aria-label="Vai de Aluguel - Precisou? Vai de Aluguel.">
+                                <!-- Círculo azul petróleo à direita -->
+                                <path d="M 276 47 A 42 42 0 1 0 286 96" fill="none" stroke="#055b75" stroke-width="14" stroke-linecap="round" />
+                                <!-- Seta coral entrando no círculo -->
+                                <path d="M 244 63 Q 268 57 293 61" fill="none" stroke="#ff5722" stroke-width="14" stroke-linecap="round" />
+                                <path d="M 278 41 L 298 61 L 274 79" fill="none" stroke="#ff5722" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+                                <!-- Sorriso coral dentro do círculo -->
+                                <path d="M 232 82 Q 251 101 271 82" fill="none" stroke="#ff5722" stroke-width="10" stroke-linecap="round" />
+
+                                <!-- Texto "Vai de" -->
+                                <text x="64" y="88" font-family="'Plus Jakarta Sans', 'Arial Rounded MT Bold', sans-serif" font-weight="800" font-size="44" letter-spacing="-1.5" fill="#055b75">Vai de</text>
+
+                                <!-- Sorriso coral sob "de" -->
+                                <path d="M 134 99 Q 156 113 178 99" fill="none" stroke="#ff5722" stroke-width="8" stroke-linecap="round" />
+
+                                <!-- Texto "Aluguel" -->
+                                <text x="170" y="158" text-anchor="middle" font-family="'Plus Jakarta Sans', 'Arial Rounded MT Bold', sans-serif" font-weight="800" font-size="68" letter-spacing="-2" fill="#ff5722">Aluguel</text>
+
+                                <!-- Slogan inferior -->
+                                <text x="170" y="196" text-anchor="middle" font-family="'Plus Jakarta Sans', sans-serif" font-weight="800" font-size="18.5" letter-spacing="-0.2" fill="#055b75">Precisou? Vai de Aluguel.</text>
+                            </svg>
+                        </div>
+
+                        <div>
+                            <span id="quote-code-badge" class="inline-block text-xs font-extrabold uppercase tracking-wider bg-vdaOrange text-white px-3 py-1 rounded-full">
+                                #VDA-0001
+                            </span>
+                            <h1 class="text-xl sm:text-2xl font-extrabold text-vdaBlue mt-2">
+                                Dados do Cliente & Resumo do Orçamento
+                            </h1>
+                            <p class="text-xs sm:text-sm text-slate-500 mt-0.5">
+                                Fluxo: <strong>1. Orçamento (Cliente)</strong> → <strong>2. Frete</strong> → <strong>3. Montagem</strong> → <strong>4. Catálogo</strong> → <strong>5. Histórico</strong>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 no-print">
+                        <button
+                            type="button"
+                            onclick="openResetModal()"
+                            class="px-3.5 py-2.5 rounded-xl border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs sm:text-sm font-bold transition cursor-pointer flex items-center gap-1.5"
+                        >
+                            <i class="fa-solid fa-trash-can"></i>
+                            <span>Limpar Tudo</span>
+                        </button>
+                        <button
+                            type="button"
+                            onclick="switchTab('freight')"
+                            class="px-4 py-2.5 rounded-xl bg-vdaOrange hover:opacity-95 text-white text-xs sm:text-sm font-bold transition cursor-pointer flex items-center gap-1.5 shadow-sm"
+                        >
+                            <span>Ir para Frete</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Formulário de dados do cliente e regras de preço -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">Nome do Cliente</label>
+                        <input
+                            type="text"
+                            id="client-name"
+                            oninput="recalculateCart()"
+                            placeholder="Ex.: Mariana Souza"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">WhatsApp / Telefone</label>
+                        <input
+                            type="text"
+                            id="client-phone"
+                            placeholder="Ex.: (19) 99999-9999"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">Data do Evento</label>
+                        <input
+                            type="date"
+                            id="event-date"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">Diárias de Locação</label>
+                        <input
+                            type="number"
+                            id="rental-days"
+                            min="1"
+                            value="1"
+                            oninput="recalculateCart()"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">Tabela de Preço (CPF / CNPJ)</label>
+                        <select
+                            id="price-tier-select"
+                            onchange="onPriceTierChange()"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                            <option value="cpf">Pessoa Física (CPF)</option>
+                            <option value="cnpj">Pessoa Jurídica (CNPJ)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 block mb-1">Faixa de Desconto (70+ un.)</label>
+                        <select
+                            id="discount-mode-select"
+                            onchange="onPriceTierChange()"
+                            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                            <option value="auto">Automático (com desconto em 70+ un.)</option>
+                            <option value="no-discount">Forçar Sem Desconto (preço cheio)</option>
+                            <option value="with-discount">Forçar Com Desconto (preço promocional)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Indicador de status da tabela e desconto por volume -->
+                <div class="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 no-print">
+                    <div>
+                        <span class="text-xs font-bold text-slate-700 block">Status da Tabela Aplicada</span>
+                        <span id="volume-discount-status" class="text-[11px] font-semibold text-slate-500">
+                            Total atual: 0 un. (desconto automático em 70+ un.)
+                        </span>
+                    </div>
+                    <span id="volume-discount-badge" class="text-xs font-extrabold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700">
+                        Sem desconto
+                    </span>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-600 block mb-1">Observações do Orçamento</label>
+                    <textarea
+                        id="client-notes"
+                        rows="2"
+                        placeholder="Horário de entrega, acesso ao local, orientações de posicionamento..."
+                        class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                    ></textarea>
+                </div>
+
+                <!-- Atalhos rápidos dentro do Orçamento para preencher Frete e Montagem -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1 no-print">
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <span class="text-[11px] font-extrabold uppercase tracking-wide text-vdaBlue block">Atalho Rápido • Etapa 2</span>
+                                <h2 class="text-sm font-extrabold text-slate-800">Frete & Logística</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onclick="switchTab('freight')"
+                                class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-vdaBlue text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                            >
+                                <span>Tela de Frete</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div>
+                                <label class="text-[11px] font-bold text-slate-600 block mb-1">Modalidade</label>
+                                <select
+                                    id="quick-freight-mode"
+                                    onchange="syncFreightFromQuick('mode')"
+                                    class="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                                >
+                                    <option value="delivery">Entrega (R$ 2,50/km)</option>
+                                    <option value="pickup">Retirada (R$ 0,00)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] font-bold text-slate-600 block mb-1">Cidade</label>
+                                <select
+                                    id="quick-freight-city"
+                                    onchange="syncFreightFromQuick('city')"
+                                    class="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                                >
+                                    <option value="">Manual / Outra</option>
+                                    <option value="Louveira">Louveira</option>
+                                    <option value="Valinhos">Valinhos</option>
+                                    <option value="Itatiba">Itatiba</option>
+                                    <option value="Itupeva">Itupeva</option>
+                                    <option value="Campinas">Campinas</option>
+                                    <option value="Jundiaí">Jundiaí</option>
+                                    <option value="Indaiatuba">Indaiatuba</option>
+                                    <option value="Morungaba">Morungaba</option>
+                                    <option value="Várzea Paulista">Várzea Paulista</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-[11px] font-bold text-slate-600 block mb-1">Distância (km)</label>
+                                <input
+                                    type="number"
+                                    id="quick-freight-km"
+                                    min="0"
+                                    step="0.5"
+                                    value="0"
+                                    oninput="syncFreightFromQuick('km')"
+                                    class="w-full px-2.5 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                                >
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-200/80">
+                            <span class="text-slate-500 font-semibold">Valor calculado do frete:</span>
+                            <span id="quick-freight-total" class="font-extrabold text-vdaBlue text-sm">R$ 0,00</span>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-3">
+                        <div class="flex items-center justify-between gap-2">
+                            <div>
+                                <span class="text-[11px] font-extrabold uppercase tracking-wide text-vdaBlue block">Atalho Rápido • Etapa 3</span>
+                                <h2 class="text-sm font-extrabold text-slate-800">Montagem & Desmontagem</h2>
+                            </div>
+                            <button
+                                type="button"
+                                onclick="switchTab('services')"
+                                class="px-3 py-1.5 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-vdaBlue text-xs font-bold transition cursor-pointer flex items-center gap-1"
+                            >
+                                <span>Tela de Montagem</span>
+                                <i class="fa-solid fa-arrow-up-right-from-square text-[11px]"></i>
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            <div class="bg-white border border-slate-200 rounded-xl p-2.5 space-y-2">
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        id="quick-assembly-enabled"
+                                        onchange="syncServicesFromQuick()"
+                                        class="w-4 h-4 rounded accent-vdaOrange"
+                                    >
+                                    <span>Montagem</span>
+                                </label>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] text-slate-500 font-semibold">Diárias:</span>
+                                    <input
+                                        type="number"
+                                        id="quick-assembly-qty"
+                                        min="1"
+                                        value="1"
+                                        oninput="syncServicesFromQuick()"
+                                        class="w-16 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-right"
+                                    >
+                                </div>
+                            </div>
+
+                            <div class="bg-white border border-slate-200 rounded-xl p-2.5 space-y-2">
+                                <label class="flex items-center gap-2 text-xs font-bold text-slate-800 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        id="quick-disassembly-enabled"
+                                        onchange="syncServicesFromQuick()"
+                                        class="w-4 h-4 rounded accent-vdaOrange"
+                                    >
+                                    <span>Desmontagem</span>
+                                </label>
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="text-[11px] text-slate-500 font-semibold">Diárias:</span>
+                                    <input
+                                        type="number"
+                                        id="quick-disassembly-qty"
+                                        min="1"
+                                        value="1"
+                                        oninput="syncServicesFromQuick()"
+                                        class="w-16 px-2 py-1 rounded-lg bg-slate-50 border border-slate-200 text-xs font-bold text-right"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-200/80">
+                            <span class="text-slate-500 font-semibold">Apenas itens Vai de Aluguel • Total:</span>
+                            <span id="quick-services-total" class="font-extrabold text-vdaBlue text-sm">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tabela de itens adicionados com cores por segmento -->
+                <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold">
+                                <th class="py-3 px-4">Item / Segmento</th>
+                                <th class="py-3 px-4 text-center">Qtd</th>
+                                <th class="py-3 px-4 text-right">Unitário</th>
+                                <th class="py-3 px-4 text-right">Subtotal</th>
+                                <th class="py-3 px-4 text-center no-print">Ação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cart-table-body" class="divide-y divide-slate-100 text-sm">
+                            <tr>
+                                <td colspan="5" class="py-6 text-center text-slate-400">
+                                    Nenhum item selecionado ainda. Vá para a aba <strong>2. Catálogo</strong> para adicionar itens.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Resumo financeiro e botões de exportação -->
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    <div class="lg:col-span-6 bg-slate-50 border border-slate-200 rounded-2xl p-4 space-y-2 text-xs sm:text-sm">
+                        <h3 class="font-extrabold text-vdaBlue text-sm">Resumo Operacional</h3>
+                        <p class="text-slate-600">
+                            <strong>Itens selecionados:</strong> <span id="summary-items-count">0 un.</span>
+                        </p>
+                        <p class="text-slate-600">
+                            <strong>Frete:</strong> <span id="summary-freight-label">Retirada no local (R$ 0,00)</span>
+                        </p>
+                        <p class="text-slate-600">
+                            <strong>Montagem / Desmontagem:</strong> <span id="summary-services-label">Não contratado (R$ 0,00)</span>
+                        </p>
+                        <p id="summary-services-scope" class="hidden text-xs font-semibold text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 leading-relaxed">
+                            Escopo do serviço: cobre exclusivamente a montagem, posicionamento e organização conforme orientação do cliente/organizador dos itens locados com a Vai de Aluguel. Não inclui outras estruturas ou serviços de terceiros do evento.
+                        </p>
+                    </div>
+
+                    <div class="lg:col-span-6 bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-2.5">
+                        <div class="flex justify-between text-sm text-slate-600">
+                            <span>Subtotal dos Itens:</span>
+                            <span id="quote-items-total" class="font-bold text-slate-800">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-slate-600">
+                            <span>Frete & Logística:</span>
+                            <span id="quote-freight-total" class="font-bold text-slate-800">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between text-sm text-slate-600">
+                            <span>Montagem / Desmontagem:</span>
+                            <span id="quote-services-total" class="font-bold text-slate-800">R$ 0,00</span>
+                        </div>
+                        <div class="flex justify-between items-center text-lg sm:text-xl font-extrabold text-vdaBlue pt-3 border-t border-slate-200">
+                            <span>Total Geral:</span>
+                            <span id="quote-grand-total" class="text-vdaOrange">R$ 0,00</span>
+                        </div>
+
+                        <div class="flex flex-wrap gap-2.5 pt-3 no-print">
+                            <button
+                                type="button"
+                                onclick="finalizeQuote()"
+                                class="w-full px-4 py-2.5 rounded-xl bg-vdaOrange hover:opacity-95 text-white text-xs sm:text-sm font-extrabold transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                            >
+                                <i class="fa-solid fa-flag-checkered"></i>
+                                <span>Finalizar Orçamento (Salvar no Histórico)</span>
+                            </button>
+                            <button
+                                type="button"
+                                onclick="sendWhatsAppQuote()"
+                                class="flex-1 min-w-[160px] px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                            >
+                                <i class="fa-brands fa-whatsapp text-base"></i>
+                                <span>Enviar WhatsApp</span>
+                            </button>
+                            <button
+                                type="button"
+                                onclick="generatePDFQuote()"
+                                class="flex-1 min-w-[160px] px-4 py-2.5 rounded-xl bg-vdaBlue hover:opacity-95 text-white text-xs sm:text-sm font-bold transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                            >
+                                <i class="fa-solid fa-file-pdf"></i>
+                                <span>Gerar PDF</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 2: CATÁLOGO (4ª ETAPA DO FLUXO) -->
+        <section id="tab-catalog" class="tab-section hidden space-y-6">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-vdaBlue">Catálogo de Locação</h2>
+                        <p class="text-xs sm:text-sm text-slate-500">
+                            82 itens nos 5 segmentos da planilha (preços Sem Desconto e Com Desconto para CPF / CNPJ).
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-2 w-full sm:w-auto no-print">
+                        <input
+                            type="text"
+                            id="catalog-search"
+                            oninput="renderCatalog()"
+                            placeholder="Buscar por código ou nome..."
+                            class="w-full sm:w-64 px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                        >
+                        <button
+                            type="button"
+                            onclick="switchTab('quote')"
+                            class="px-4 py-2.5 rounded-xl bg-vdaOrange text-white text-xs font-bold hover:opacity-95 transition cursor-pointer flex items-center justify-center gap-1.5"
+                        >
+                            <span>Ver Orçamento</span>
+                            <i class="fa-solid fa-arrow-right"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Seletor dos 5 segmentos -->
+                <div id="catalog-segments-bar" class="flex items-center gap-2 overflow-x-auto pt-2 border-t border-slate-100 pb-1 no-print">
+                    <!-- Injetado via JS -->
+                </div>
+            </div>
+
+            <div id="catalog-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </section>
+
+        <!-- ABA 3: FRETE (2ª ETAPA DO FLUXO) -->
+        <section id="tab-freight" class="tab-section hidden space-y-6">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-vdaBlue">Frete & Logística</h2>
+                        <p class="text-xs sm:text-sm text-slate-500">
+                            Tarifa base de <strong>R$ 2,50 por km</strong> ou retirada no local sem custo.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        onclick="switchTab('services')"
+                        class="px-4 py-2.5 rounded-xl bg-vdaOrange text-white text-xs font-bold hover:opacity-95 transition cursor-pointer flex items-center gap-1.5 no-print"
+                    >
+                        <span>Próximo: Montagem</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-7 space-y-4">
+                        <div>
+                            <label class="text-xs font-bold text-slate-600 block mb-1">Modalidade</label>
+                            <select
+                                id="freight-mode"
+                                onchange="calculateFreight()"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                            >
+                                <option value="delivery">Entrega com Frete (R$ 2,50 / km)</option>
+                                <option value="pickup">Retirada no Local (R$ 0,00)</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Cidade Atendida</label>
+                                <select
+                                    id="freight-city"
+                                    onchange="applyCityDistance()"
+                                    class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                                >
+                                    <option value="">Personalizada / Manual</option>
+                                    <option value="Louveira">Louveira</option>
+                                    <option value="Valinhos">Valinhos</option>
+                                    <option value="Itatiba">Itatiba</option>
+                                    <option value="Itupeva">Itupeva</option>
+                                    <option value="Campinas">Campinas</option>
+                                    <option value="Jundiaí">Jundiaí</option>
+                                    <option value="Indaiatuba">Indaiatuba</option>
+                                    <option value="Morungaba">Morungaba</option>
+                                    <option value="Várzea Paulista">Várzea Paulista</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="text-xs font-bold text-slate-600 block mb-1">Distância Total (km)</label>
+                                <input
+                                    type="number"
+                                    id="freight-km"
+                                    min="0"
+                                    step="0.5"
+                                    value="0"
+                                    oninput="calculateFreight()"
+                                    class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                                >
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-bold text-slate-600 block mb-1">Valor por km (R$)</label>
+                            <input
+                                type="number"
+                                id="freight-rate"
+                                min="0"
+                                step="0.10"
+                                value="2.50"
+                                oninput="calculateFreight()"
+                                class="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold focus:ring-2 focus:ring-vdaBlue focus:outline-none"
+                            >
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                        <div class="space-y-2 text-sm">
+                            <h3 class="font-extrabold text-vdaBlue">Resumo do Frete</h3>
+                            <div class="flex justify-between text-slate-600">
+                                <span>Cidade:</span>
+                                <span id="freight-city-display" class="font-bold text-slate-800">Não informada</span>
+                            </div>
+                            <div class="flex justify-between text-slate-600">
+                                <span>Distância:</span>
+                                <span id="freight-km-display" class="font-bold text-slate-800">0 km</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-200">
+                            <span class="text-xs font-bold uppercase text-slate-400 block">Total do Frete</span>
+                            <span id="freight-total-display" class="text-3xl font-extrabold text-vdaBlue">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 4: MONTAGEM & DESMONTAGEM (3ª ETAPA DO FLUXO) -->
+        <section id="tab-services" class="tab-section hidden space-y-6">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 pb-4">
+                    <div>
+                        <h2 class="text-xl font-extrabold text-vdaBlue">Montagem & Desmontagem</h2>
+                        <p class="text-xs sm:text-sm text-slate-500">
+                            Diárias separadas: contrate apenas montagem, apenas desmontagem ou ambos.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        onclick="switchTab('catalog')"
+                        class="px-4 py-2.5 rounded-xl bg-vdaOrange text-white text-xs font-bold hover:opacity-95 transition cursor-pointer flex items-center gap-1.5 no-print"
+                    >
+                        <span>Próximo: Catálogo</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <div class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-xs sm:text-sm text-amber-900 leading-relaxed">
+                    <strong>Importante sobre o serviço:</strong> Ao incluir montagem e/ou desmontagem, a equipe realiza a montagem, o posicionamento e a organização exatamente conforme pedido pelo cliente ou organizador do evento <strong>exclusivamente dos itens locados com a Vai de Aluguel</strong> (mesas, cadeiras e demais itens da locação). Não abrange estruturas de terceiros ou outras partes do evento.
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <div class="lg:col-span-7 space-y-4">
+                        <!-- Bloco Montagem -->
+                        <div class="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50/60">
+                            <label class="flex items-center gap-2.5 font-bold text-slate-800 text-sm cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    id="assembly-enabled"
+                                    onchange="calculateServices()"
+                                    class="w-4 h-4 rounded accent-vdaOrange"
+                                >
+                                <span>Incluir Diária de Montagem</span>
+                            </label>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs font-bold text-slate-600 block mb-1">Pessoas / Diárias</label>
+                                    <input
+                                        type="number"
+                                        id="assembly-qty"
+                                        min="1"
+                                        value="1"
+                                        oninput="calculateServices()"
+                                        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold"
+                                    >
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-600 block mb-1">Valor da Diária (R$)</label>
+                                    <input
+                                        type="number"
+                                        id="assembly-rate"
+                                        min="0"
+                                        step="5"
+                                        value="150.00"
+                                        oninput="calculateServices()"
+                                        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Bloco Desmontagem -->
+                        <div class="border border-slate-200 rounded-2xl p-4 space-y-3 bg-slate-50/60">
+                            <label class="flex items-center gap-2.5 font-bold text-slate-800 text-sm cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    id="disassembly-enabled"
+                                    onchange="calculateServices()"
+                                    class="w-4 h-4 rounded accent-vdaOrange"
+                                >
+                                <span>Incluir Diária de Desmontagem</span>
+                            </label>
+
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div>
+                                    <label class="text-xs font-bold text-slate-600 block mb-1">Pessoas / Diárias</label>
+                                    <input
+                                        type="number"
+                                        id="disassembly-qty"
+                                        min="1"
+                                        value="1"
+                                        oninput="calculateServices()"
+                                        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold"
+                                    >
+                                </div>
+                                <div>
+                                    <label class="text-xs font-bold text-slate-600 block mb-1">Valor da Diária (R$)</label>
+                                    <input
+                                        type="number"
+                                        id="disassembly-rate"
+                                        min="0"
+                                        step="5"
+                                        value="150.00"
+                                        oninput="calculateServices()"
+                                        class="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-sm font-bold"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between space-y-4">
+                        <div class="space-y-2 text-sm">
+                            <h3 class="font-extrabold text-vdaBlue">Resumo dos Serviços</h3>
+                            <div class="flex justify-between text-slate-600">
+                                <span>Montagem:</span>
+                                <span id="assembly-subtotal-display" class="font-bold text-slate-800">R$ 0,00</span>
+                            </div>
+                            <div class="flex justify-between text-slate-600">
+                                <span>Desmontagem:</span>
+                                <span id="disassembly-subtotal-display" class="font-bold text-slate-800">R$ 0,00</span>
+                            </div>
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-200">
+                            <span class="text-xs font-bold uppercase text-slate-400 block">Total Montagem / Desmontagem</span>
+                            <span id="services-total-display" class="text-3xl font-extrabold text-vdaBlue">R$ 0,00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ABA 5: HISTÓRICO -->
+        <section id="tab-history" class="tab-section hidden space-y-6">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 sm:p-6 space-y-4">
+                <div>
+                    <h2 class="text-xl font-extrabold text-vdaBlue">Histórico de Orçamentos</h2>
+                    <p class="text-xs sm:text-sm text-slate-500">
+                        Orçamentos finalizados com numeração sequencial preservada mesmo após limpar o atendimento atual.
+                    </p>
+                </div>
+
+                <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase font-bold">
+                                <th class="py-3 px-4">Código</th>
+                                <th class="py-3 px-4">Data / Hora</th>
+                                <th class="py-3 px-4">Cliente</th>
+                                <th class="py-3 px-4">Montagem / Desmontagem</th>
+                                <th class="py-3 px-4 text-right">Total</th>
+                                <th class="py-3 px-4 text-center no-print">Excluir</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-table-body" class="divide-y divide-slate-100 text-sm">
+                            <tr>
+                                <td colspan="6" class="py-6 text-center text-slate-400">
+                                    Nenhum orçamento finalizado ainda.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Modal de confirmação para Novo / Limpar Tudo -->
+    <div id="reset-confirm-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-[1px] z-50 hidden items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-extrabold text-slate-800">Limpar orçamento atual?</h3>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
+                        Isso vai apagar os dados do cliente, os itens selecionados, o frete e a montagem deste orçamento. Seu histórico salvo será mantido.
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button
+                    type="button"
+                    onclick="closeResetModal()"
+                    class="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-50 transition cursor-pointer"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    onclick="executeFullReset()"
+                    class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition cursor-pointer"
+                >
+                    Sim, limpar tudo
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de confirmação para excluir item específico do histórico -->
+    <div id="delete-history-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-[1px] z-50 hidden items-center justify-center p-4 no-print">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 space-y-4">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-trash-can"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-extrabold text-slate-800">Excluir do histórico?</h3>
+                    <p id="delete-history-description" class="text-xs sm:text-sm text-slate-600 mt-1 leading-relaxed">
+                        Deseja realmente excluir este orçamento do histórico?
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button
+                    type="button"
+                    onclick="closeDeleteHistoryModal()"
+                    class="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 text-xs sm:text-sm font-bold hover:bg-slate-50 transition cursor-pointer"
+                >
+                    Cancelar
+                </button>
+                <button
+                    type="button"
+                    onclick="confirmDeleteHistoryItem()"
+                    class="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition cursor-pointer"
+                >
+                    Sim, excluir
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const catalogSegments = [
+            { id: 'all', label: 'Todos' },
+            { id: 'loucas', label: 'Louças e mesa posta' },
+            { id: 'buffet', label: 'Buffet e cozinha' },
+            { id: 'bebidas', label: 'Bebidas e café' },
+            { id: 'moveis', label: 'Móveis e apoio' },
+            { id: 'som', label: 'Som imagem e iluminação' }
+        ];
+
+        const catalogItems = [
+            { id: 'VDA-001', code: 'VDA-001', name: 'Taça de água', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-002', code: 'VDA-002', name: 'Taça de espumante', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-003', code: 'VDA-003', name: 'Taça de cerveja', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-004', code: 'VDA-004', name: 'Taça de gin', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-005', code: 'VDA-005', name: 'Copo long drink suco e refrigerante', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-006', code: 'VDA-006', name: 'Copo long drink drinks', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-007', code: 'VDA-007', name: 'Copo de whisky', segment: 'loucas', unit: 'unidade', cpfDisc: 1.00, cnpjDisc: 1.00, cpf: 1.25, cnpj: 1.50 },
+            { id: 'VDA-008', code: 'VDA-008', name: 'Prato raso', segment: 'loucas', unit: 'unidade', cpfDisc: 1.35, cnpjDisc: 1.40, cpf: 1.50, cnpj: 1.40 },
+            { id: 'VDA-009', code: 'VDA-009', name: 'Prato de sobremesa', segment: 'loucas', unit: 'unidade', cpfDisc: 1.20, cnpjDisc: 1.15, cpf: 1.30, cnpj: 1.25 },
+            { id: 'VDA-010', code: 'VDA-010', name: 'Prato fundo', segment: 'loucas', unit: 'unidade', cpfDisc: 1.20, cnpjDisc: 1.15, cpf: 1.30, cnpj: 1.25 },
+            { id: 'VDA-011', code: 'VDA-011', name: 'Garfo de jantar', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+            { id: 'VDA-012', code: 'VDA-012', name: 'Garfo de sobremesa', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+            { id: 'VDA-013', code: 'VDA-013', name: 'Faca de jantar', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+            { id: 'VDA-014', code: 'VDA-014', name: 'Faca de sobremesa', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+            { id: 'VDA-015', code: 'VDA-015', name: 'Colher de mesa', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+            { id: 'VDA-016', code: 'VDA-016', name: 'Colher de sobremesa', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+            { id: 'VDA-017', code: 'VDA-017', name: 'Colher de café', segment: 'loucas', unit: 'unidade', cpfDisc: 0.70, cnpjDisc: 0.70, cpf: 0.75, cnpj: 0.80 },
+
+            { id: 'VDA-018', code: 'VDA-018', name: 'Rechaud Inox Cuba unica', segment: 'buffet', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 50.00, cpf: 55.00, cnpj: 57.00 },
+            { id: 'VDA-019', code: 'VDA-019', name: 'Rechaud Inox Cuba dupla', segment: 'buffet', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 50.00, cpf: 55.00, cnpj: 57.00 },
+            { id: 'VDA-020', code: 'VDA-020', name: 'Rechaud Inox Cuba tripla', segment: 'buffet', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 50.00, cpf: 55.00, cnpj: 57.00 },
+            { id: 'VDA-021', code: 'VDA-021', name: 'Condimentadora 6 cubas', segment: 'buffet', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 50.00, cpf: 55.00, cnpj: 57.00 },
+            { id: 'VDA-022', code: 'VDA-022', name: 'Refratario Redondo', segment: 'buffet', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 },
+            { id: 'VDA-023', code: 'VDA-023', name: 'Refratario Retangular', segment: 'buffet', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 },
+            { id: 'VDA-024', code: 'VDA-024', name: 'Refratario Oval', segment: 'buffet', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 },
+            { id: 'VDA-025', code: 'VDA-025', name: 'Bandejas oval inox 30 cm', segment: 'buffet', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 },
+            { id: 'VDA-026', code: 'VDA-026', name: 'Bandejas redonda metal 33 cm', segment: 'buffet', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 },
+            { id: 'VDA-027', code: 'VDA-027', name: 'Bandejas Aço Inox Retangular Rasa 36 X 27', segment: 'buffet', unit: 'unidade', cpfDisc: 15.00, cnpjDisc: 15.00, cpf: 18.00, cnpj: 18.00 },
+            { id: 'VDA-028', code: 'VDA-028', name: 'Bandeja Garçom', segment: 'buffet', unit: 'unidade', cpfDisc: 16.00, cnpjDisc: 16.00, cpf: 17.00, cnpj: 17.00 },
+            { id: 'VDA-029', code: 'VDA-029', name: 'Utensílios Concha', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-030', code: 'VDA-030', name: 'Utensílios Pegadores', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-031', code: 'VDA-031', name: 'Utensílios Colher de Servir', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-032', code: 'VDA-032', name: 'Utensílios Pegador de massa', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-033', code: 'VDA-033', name: 'Utensílios Espátula de bolo', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-034', code: 'VDA-034', name: 'Utensílios Facas', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-035', code: 'VDA-035', name: 'Utensílios Pegador de gelo', segment: 'buffet', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.50, cpf: 2.00, cnpj: 2.00 },
+            { id: 'VDA-036', code: 'VDA-036', name: 'Tigelas Cumbuca Porcelana Branca 440ml Sopas Cor Branco', segment: 'buffet', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 },
+            { id: 'VDA-037', code: 'VDA-037', name: 'Tigelas Travessa Bowl Vidro Organico 1,6l Servir Organizar', segment: 'buffet', unit: 'unidade', cpfDisc: 14.00, cnpjDisc: 14.00, cpf: 20.00, cnpj: 20.00 },
+
+            { id: 'VDA-038', code: 'VDA-038', name: 'Garrafa Térmica Soprano 1 Litro Compacta Bomba Trava Ampola', segment: 'bebidas', unit: 'unidade', cpfDisc: 9.00, cnpjDisc: 10.00, cpf: 13.00, cnpj: 15.00 },
+            { id: 'VDA-039', code: 'VDA-039', name: 'Garrafa Térmica Inox 2,5l Exclusiva - Soprano Cor Preto/Inoxidável', segment: 'bebidas', unit: 'unidade', cpfDisc: 13.00, cnpjDisc: 15.00, cpf: 15.00, cnpj: 18.00 },
+            { id: 'VDA-040', code: 'VDA-040', name: 'Kit 2 Suqueiras Acrilico Diamond 4,5l Moderna E Resistente', segment: 'bebidas', unit: 'unidade', cpfDisc: 35.00, cnpjDisc: 38.00, cpf: 40.00, cnpj: 40.00 },
+            { id: 'VDA-041', code: 'VDA-041', name: 'Suqueira De Cristal Dispenser 2lts Wolff Brandon Cor Transparent', segment: 'bebidas', unit: 'unidade', cpfDisc: 37.00, cnpjDisc: 38.00, cpf: 42.00, cnpj: 44.00 },
+            { id: 'VDA-042', code: 'VDA-042', name: 'Suqueira 5 Litros Vidro Diamante Transparente Com Torneira', segment: 'bebidas', unit: 'unidade', cpfDisc: 46.00, cnpjDisc: 47.00, cpf: 50.00, cnpj: 50.00 },
+            { id: 'VDA-043', code: 'VDA-043', name: 'Jarra Tango 5447 1,5l', segment: 'bebidas', unit: 'unidade', cpfDisc: 5.00, cnpjDisc: 6.00, cpf: 7.00, cnpj: 7.50 },
+            { id: 'VDA-044', code: 'VDA-044', name: 'Utensílios Baldinho de Gelo', segment: 'bebidas', unit: 'unidade', cpfDisc: 3.50, cnpjDisc: 4.00, cpf: 5.00, cnpj: 6.00 },
+            { id: 'VDA-045', code: 'VDA-045', name: 'Champanheiras Acrílicas Fiesta 33L com Pé de Alumínio para Bebidas', segment: 'bebidas', unit: 'unidade', cpfDisc: 68.00, cnpjDisc: 70.00, cpf: 72.00, cnpj: 74.00 },
+            { id: 'VDA-046', code: 'VDA-046', name: 'Champanheira 12 Litros Balde Grande Acrílico Luxo Resistente', segment: 'bebidas', unit: 'unidade', cpfDisc: 40.00, cnpjDisc: 42.00, cpf: 45.00, cnpj: 47.00 },
+            { id: 'VDA-047', code: 'VDA-047', name: 'Xícaras Café Brancas Com Pires 12 Peças Porcelana 95ml Cor Branco', segment: 'bebidas', unit: 'unidade', cpfDisc: 1.50, cnpjDisc: 1.80, cpf: 2.00, cnpj: 2.20 },
+
+            { id: 'VDA-048', code: 'VDA-048', name: 'Mesas', segment: 'moveis', unit: 'unidade', cpfDisc: 8.00, cnpjDisc: 9.00, cpf: 9.00, cnpj: 10.00 },
+            { id: 'VDA-049', code: 'VDA-049', name: 'Mesa Conjunto (1 mesa e 1 cadeira)', segment: 'moveis', unit: 'conjunto', cpfDisc: 19.00, cnpjDisc: 20.00, cpf: 20.00, cnpj: 22.00 },
+            { id: 'VDA-049B', code: 'VDA-049', name: 'Mesa dobrável', segment: 'moveis', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 30.00, cpf: 35.00, cnpj: 38.00 },
+            { id: 'VDA-050', code: 'VDA-050', name: 'Cadeiras', segment: 'moveis', unit: 'unidade', cpfDisc: 6.00, cnpjDisc: 7.00, cpf: 8.00, cnpj: 9.00 },
+            { id: 'VDA-051', code: 'VDA-051', name: 'Banquinho de plástico', segment: 'moveis', unit: 'unidade', cpfDisc: 4.00, cnpjDisc: 5.00, cpf: 6.00, cnpj: 7.00 },
+            { id: 'VDA-052', code: 'VDA-052', name: 'Toalhas de mesa Branca', segment: 'moveis', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 11.00, cpf: 11.00, cnpj: 12.00 },
+            { id: 'VDA-053', code: 'VDA-053', name: 'Toalhas de mesa Preta', segment: 'moveis', unit: 'unidade', cpfDisc: 8.00, cnpjDisc: 9.00, cpf: 9.00, cnpj: 10.00 },
+            { id: 'VDA-054', code: 'VDA-054', name: 'Toalha de mesa Azul', segment: 'moveis', unit: 'unidade', cpfDisc: 8.00, cnpjDisc: 9.00, cpf: 9.00, cnpj: 10.00 },
+            { id: 'VDA-055', code: 'VDA-055', name: 'Toalha de mesa Rosa', segment: 'moveis', unit: 'unidade', cpfDisc: 8.00, cnpjDisc: 9.00, cpf: 9.00, cnpj: 10.00 },
+            { id: 'VDA-056', code: 'VDA-056', name: 'Toalha de mesa xadrez', segment: 'moveis', unit: 'unidade', cpfDisc: 8.00, cnpjDisc: 9.00, cpf: 9.00, cnpj: 10.00 },
+            { id: 'VDA-057', code: 'VDA-057', name: 'Toalha de mesa Vermelho', segment: 'moveis', unit: 'unidade', cpfDisc: 8.00, cnpjDisc: 9.00, cpf: 9.00, cnpj: 10.00 },
+            { id: 'VDA-058', code: 'VDA-058', name: 'Caixa De Isopor Laminada De 8l Para Churrasco Salgados', segment: 'moveis', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 12.00, cpf: 12.00, cnpj: 13.00 },
+            { id: 'VDA-059', code: 'VDA-059', name: 'Carretinha', segment: 'moveis', unit: 'unidade', cpfDisc: 90.00, cnpjDisc: 95.00, cpf: 95.00, cnpj: 100.00 },
+            { id: 'VDA-060', code: 'VDA-060', name: 'Tenda', segment: 'moveis', unit: 'unidade', cpfDisc: 130.00, cnpjDisc: 135.00, cpf: 135.00, cnpj: 140.00 },
+            { id: 'VDA-082', code: 'VDA-082', name: 'Guarda-sol / Ombrelone de Sol', segment: 'moveis', unit: 'unidade', cpfDisc: 25.00, cnpjDisc: 28.00, cpf: 30.00, cnpj: 32.00 },
+
+            { id: 'VDA-061', code: 'VDA-061', name: 'Caixa de som básica', segment: 'som', unit: 'unidade', cpfDisc: 180.00, cnpjDisc: 185.00, cpf: 185.00, cnpj: 190.00 },
+            { id: 'VDA-062', code: 'VDA-062', name: 'Microfone com fio', segment: 'som', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 35.00, cpf: 35.00, cnpj: 38.00 },
+            { id: 'VDA-063', code: 'VDA-063', name: 'Microfone Headset', segment: 'som', unit: 'unidade', cpfDisc: 40.00, cnpjDisc: 43.00, cpf: 43.00, cnpj: 45.00 },
+            { id: 'VDA-064', code: 'VDA-064', name: 'Microfone sem fio', segment: 'som', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 55.00, cpf: 55.00, cnpj: 60.00 },
+            { id: 'VDA-065', code: 'VDA-065', name: 'Mesa de som 8 canais', segment: 'som', unit: 'unidade', cpfDisc: 100.00, cnpjDisc: 110.00, cpf: 110.00, cnpj: 120.00 },
+            { id: 'VDA-066', code: 'VDA-066', name: 'Cabo avulso P10 TRS × P10 TRS', segment: 'som', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 13.00, cpf: 13.00, cnpj: 14.00 },
+            { id: 'VDA-067', code: 'VDA-067', name: 'Cabo avulso XLR fêmea × XLR macho, 5 m', segment: 'som', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 13.00, cpf: 13.00, cnpj: 14.00 },
+            { id: 'VDA-068', code: 'VDA-068', name: 'Cabo avulso XLR fêmea × XLR macho, 10 m', segment: 'som', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 13.00, cpf: 13.00, cnpj: 14.00 },
+            { id: 'VDA-069', code: 'VDA-069', name: 'Cabo avulso P2 estéreo × 2 P10 mono, 1,5–3m', segment: 'som', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 13.00, cpf: 13.00, cnpj: 14.00 },
+            { id: 'VDA-070', code: 'VDA-070', name: 'Aparelho de karaokê', segment: 'som', unit: 'unidade', cpfDisc: 180.00, cnpjDisc: 200.00, cpf: 190.00, cnpj: 205.00 },
+            { id: 'VDA-071', code: 'VDA-071', name: 'Projetor básico para uso interno', segment: 'som', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 35.00, cpf: 35.00, cnpj: 40.00 },
+            { id: 'VDA-072', code: 'VDA-072', name: 'Telão para projetor', segment: 'som', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 35.00, cpf: 35.00, cnpj: 40.00 },
+            { id: 'VDA-073', code: 'VDA-073', name: 'Iluminação PAR LED RGBW', segment: 'som', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 35.00, cpf: 35.00, cnpj: 40.00 },
+            { id: 'VDA-074', code: 'VDA-074', name: 'Strobo 108 Leds Branco Rítmico Bivolt Iluminação Festa', segment: 'som', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 35.00, cpf: 35.00, cnpj: 40.00 },
+            { id: 'VDA-075', code: 'VDA-075', name: 'Mesa Controladora Dmx 192 Canais Efeito De Luz', segment: 'som', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 55.00, cpf: 55.00, cnpj: 60.00 },
+            { id: 'VDA-076', code: 'VDA-076', name: 'Cabos DMX próprios para iluminação', segment: 'som', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 13.00, cpf: 13.00, cnpj: 14.00 },
+            { id: 'VDA-077', code: 'VDA-077', name: 'Laser Holográfico Projetor Luzes De Led Festa Balada Dj', segment: 'som', unit: 'unidade', cpfDisc: 30.00, cnpjDisc: 35.00, cpf: 35.00, cnpj: 40.00 },
+            { id: 'VDA-078', code: 'VDA-078', name: 'Maquina De Bolha De Sabão A Pilha Para Festas', segment: 'som', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 55.00, cpf: 55.00, cnpj: 60.00 },
+            { id: 'VDA-079', code: 'VDA-079', name: 'Filtro De Linha Régua 8 Tomadas Diagonais Super Premium', segment: 'som', unit: 'unidade', cpfDisc: 50.00, cnpjDisc: 55.00, cpf: 55.00, cnpj: 60.00 },
+            { id: 'VDA-080', code: 'VDA-080', name: 'Extensão Elétrica 30 Metros Reforçada 3 Tomadas Cabo Resistente', segment: 'som', unit: 'unidade', cpfDisc: 10.00, cnpjDisc: 13.00, cpf: 13.00, cnpj: 14.00 },
+            { id: 'VDA-081', code: 'VDA-081', name: 'Pedestal p/ microfone', segment: 'som', unit: 'unidade', cpfDisc: 18.00, cnpjDisc: 18.00, cpf: 20.00, cnpj: 20.00 }
+        ];
+
+        const cityDistances = {
+            'Louveira': 10,
+            'Valinhos': 15,
+            'Itatiba': 25,
+            'Itupeva': 20,
+            'Campinas': 30,
+            'Jundiaí': 25,
+            'Indaiatuba': 40,
+            'Morungaba': 35,
+            'Várzea Paulista': 30
+        };
+
+        let cart = {};
+        let selectedSegment = 'all';
+        let nextQuoteSeq = 1;
+        let quoteHistory = [];
+        let pendingDeleteHistoryCode = null;
+        let toastTimeout = null;
+
+        function getSegmentTheme(segmentId) {
+            switch (segmentId) {
+                case 'loucas':
+                    return {
+                        cardBorder: 'border-pink-300',
+                        cardBg: 'bg-pink-50/35',
+                        rowBg: 'bg-pink-50/45 hover:bg-pink-50/80',
+                        badge: 'bg-pink-100 text-pink-800 border border-pink-200',
+                        code: 'text-pink-700',
+                        pillActive: 'bg-pink-600 text-white border-pink-600',
+                        pillIdle: 'bg-pink-50 text-pink-800 border-pink-200 hover:bg-pink-100'
+                    };
+                case 'buffet':
+                    return {
+                        cardBorder: 'border-emerald-300',
+                        cardBg: 'bg-emerald-50/35',
+                        rowBg: 'bg-emerald-50/45 hover:bg-emerald-50/80',
+                        badge: 'bg-emerald-100 text-emerald-800 border border-emerald-200',
+                        code: 'text-emerald-700',
+                        pillActive: 'bg-emerald-600 text-white border-emerald-600',
+                        pillIdle: 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100'
+                    };
+                case 'bebidas':
+                    return {
+                        cardBorder: 'border-amber-300',
+                        cardBg: 'bg-amber-50/40',
+                        rowBg: 'bg-amber-50/50 hover:bg-amber-50/85',
+                        badge: 'bg-amber-100 text-amber-900 border border-amber-200',
+                        code: 'text-amber-700',
+                        pillActive: 'bg-amber-500 text-white border-amber-500',
+                        pillIdle: 'bg-amber-50 text-amber-900 border-amber-200 hover:bg-amber-100'
+                    };
+                case 'moveis':
+                    return {
+                        cardBorder: 'border-sky-300',
+                        cardBg: 'bg-sky-50/35',
+                        rowBg: 'bg-sky-50/45 hover:bg-sky-50/80',
+                        badge: 'bg-sky-100 text-sky-800 border border-sky-200',
+                        code: 'text-sky-700',
+                        pillActive: 'bg-sky-600 text-white border-sky-600',
+                        pillIdle: 'bg-sky-50 text-sky-800 border-sky-200 hover:bg-sky-100'
+                    };
+                case 'som':
+                    return {
+                        cardBorder: 'border-rose-300',
+                        cardBg: 'bg-rose-50/35',
+                        rowBg: 'bg-rose-50/45 hover:bg-rose-50/80',
+                        badge: 'bg-rose-100 text-rose-800 border border-rose-200',
+                        code: 'text-rose-700',
+                        pillActive: 'bg-rose-600 text-white border-rose-600',
+                        pillIdle: 'bg-rose-50 text-rose-800 border-rose-200 hover:bg-rose-100'
+                    };
+                default:
+                    return {
+                        cardBorder: 'border-slate-200',
+                        cardBg: 'bg-white',
+                        rowBg: 'bg-white hover:bg-slate-50',
+                        badge: 'bg-slate-100 text-slate-700 border border-slate-200',
+                        code: 'text-vdaBlue',
+                        pillActive: 'bg-vdaBlue text-white border-vdaBlue',
+                        pillIdle: 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                    };
+            }
+        }
+
+        function formatMoney(value) {
+            return (Number(value) || 0).toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL'
+            });
+        }
+
+        function showToast(message) {
+            const banner = document.getElementById('toast-banner');
+            const msgEl = document.getElementById('toast-message');
+            if (!banner || !msgEl) return;
+
+            msgEl.textContent = message;
+            banner.classList.remove('hidden');
+            banner.classList.add('flex');
+
+            if (toastTimeout) clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                banner.classList.add('hidden');
+                banner.classList.remove('flex');
+            }, 3000);
+        }
+
+        function getCurrentQuoteCode() {
+            return `#VDA-${String(nextQuoteSeq).padStart(4, '0')}`;
+        }
+
+        function updateQuoteCodeDisplay() {
+            const code = getCurrentQuoteCode();
+            const badge = document.getElementById('quote-code-badge');
+            const headerBadge = document.getElementById('header-quote-code');
+            if (badge) badge.textContent = code;
+            if (headerBadge) headerBadge.textContent = code;
+        }
+
+        function switchTab(tabName) {
+            const tabs = ['quote', 'freight', 'services', 'catalog', 'history'];
+            tabs.forEach((name) => {
+                const section = document.getElementById(`tab-${name}`);
+                const btn = document.getElementById(`nav-btn-${name}`);
+                if (section) {
+                    section.classList.toggle('hidden', name !== tabName);
+                }
+                if (btn) {
+                    if (name === tabName) {
+                        btn.className = 'nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap bg-white text-vdaBlue';
+                    } else {
+                        btn.className = 'nav-tab-btn px-4 py-2 text-xs sm:text-sm font-bold rounded-t-xl transition cursor-pointer whitespace-nowrap hover:bg-white/10 text-white';
+                    }
+                }
+            });
+
+            if (tabName === 'quote') recalculateCart();
+            if (tabName === 'catalog') {
+                renderSegmentsBar();
+                renderCatalog();
+            }
+            if (tabName === 'history') renderHistoryTable();
+        }
+
+        function selectSegment(segId) {
+            selectedSegment = segId;
+            renderSegmentsBar();
+            renderCatalog();
+        }
+
+        function renderSegmentsBar() {
+            const bar = document.getElementById('catalog-segments-bar');
+            if (!bar) return;
+
+            bar.innerHTML = catalogSegments.map((seg) => {
+                const count = seg.id === 'all'
+                    ? catalogItems.length
+                    : catalogItems.filter((item) => item.segment === seg.id).length;
+                const isSelected = selectedSegment === seg.id;
+                const theme = getSegmentTheme(seg.id);
+                const btnStyle = isSelected ? theme.pillActive : theme.pillIdle;
+
+                return `
+                    <button
+                        type="button"
+                        onclick="selectSegment('${seg.id}')"
+                        class="px-3.5 py-1.5 rounded-full text-xs font-bold border transition cursor-pointer whitespace-nowrap ${btnStyle}"
+                    >
+                        ${seg.label} (${count})
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function getTotalCartUnits() {
+            return Object.values(cart).reduce((sum, qty) => sum + (Number(qty) || 0), 0);
+        }
+
+        function isVolumeDiscountActive() {
+            const modeEl = document.getElementById('discount-mode-select');
+            const mode = modeEl ? modeEl.value : 'auto';
+            if (mode === 'with-discount') return true;
+            if (mode === 'no-discount') return false;
+            return getTotalCartUnits() >= 70;
+        }
+
+        function getItemUnitPrice(item, useDiscount = isVolumeDiscountActive()) {
+            const tierEl = document.getElementById('price-tier-select');
+            const tier = tierEl ? tierEl.value : 'cpf';
+            if (tier === 'cnpj') {
+                return useDiscount ? item.cnpjDisc : item.cnpj;
+            }
+            return useDiscount ? item.cpfDisc : item.cpf;
+        }
+
+        function onPriceTierChange() {
+            recalculateCart();
+            renderCatalog();
+        }
+
+        function renderCatalog() {
+            const grid = document.getElementById('catalog-grid');
+            const searchEl = document.getElementById('catalog-search');
+            if (!grid) return;
+
+            const term = (searchEl ? searchEl.value : '').trim().toLowerCase();
+            const useDiscount = isVolumeDiscountActive();
+
+            const filtered = catalogItems.filter((item) => {
+                const matchesSegment = selectedSegment === 'all' || item.segment === selectedSegment;
+                const matchesTerm = !term
+                    || item.name.toLowerCase().includes(term)
+                    || item.code.toLowerCase().includes(term);
+                return matchesSegment && matchesTerm;
+            });
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-400 text-sm">
+                        Nenhum item encontrado para o filtro selecionado.
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filtered.map((item) => {
+                const theme = getSegmentTheme(item.segment);
+                const segObj = catalogSegments.find((s) => s.id === item.segment);
+                const segName = segObj ? segObj.label : item.segment;
+                const activePrice = getItemUnitPrice(item, useDiscount);
+                const noDiscountPrice = getItemUnitPrice(item, false);
+                const withDiscountPrice = getItemUnitPrice(item, true);
+                const qtyInCart = cart[item.id] || 0;
+
+                return `
+                    <div class="rounded-2xl border ${theme.cardBorder} ${theme.cardBg} p-4 shadow-sm flex flex-col justify-between gap-4">
+                        <div>
+                            <div class="flex items-center justify-between gap-2">
+                                <span class="text-xs font-extrabold ${theme.code}">${item.code}</span>
+                                <span class="text-[10px] font-bold px-2.5 py-0.5 rounded-full ${theme.badge}">${segName}</span>
+                            </div>
+                            <h3 class="font-bold text-slate-800 text-sm mt-2 leading-snug">${item.name}</h3>
+                            <p class="text-vdaOrange font-black text-base mt-1.5">
+                                ${formatMoney(activePrice)} <span class="text-xs font-medium text-slate-500">/ ${item.unit}</span>
+                            </p>
+                            <p class="text-[11px] text-slate-600 mt-1">
+                                Sem desc.: <strong>${formatMoney(noDiscountPrice)}</strong> • Com desc.: <strong>${formatMoney(withDiscountPrice)}</strong>
+                            </p>
+                        </div>
+
+                        <div class="flex items-center justify-between gap-2 pt-2.5 border-t border-slate-200/70">
+                            <span class="text-xs font-semibold text-slate-600">
+                                No orçamento: <strong>${qtyInCart}</strong>
+                            </span>
+                            <button
+                                type="button"
+                                onclick="addToCart('${item.id}')"
+                                class="px-3.5 py-2 rounded-xl bg-vdaBlue hover:opacity-95 text-white text-xs font-bold transition cursor-pointer flex items-center gap-1.5"
+                            >
+                                <i class="fa-solid fa-plus"></i>
+                                <span>Adicionar</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addToCart(itemId) {
+            cart[itemId] = (cart[itemId] || 0) + 1;
+            recalculateCart();
+            renderCatalog();
+            showToast('Item adicionado ao orçamento.');
+        }
+
+        function changeCartQty(itemId, delta) {
+            if (!cart[itemId]) return;
+            const nextQty = cart[itemId] + delta;
+            if (nextQty <= 0) {
+                delete cart[itemId];
+            } else {
+                cart[itemId] = nextQty;
+            }
+            recalculateCart();
+            renderCatalog();
+        }
+
+        function removeCartItem(itemId) {
+            delete cart[itemId];
+            recalculateCart();
+            renderCatalog();
+        }
+
+        function syncQuickControlsFromMain() {
+            const qMode = document.getElementById('quick-freight-mode');
+            const qCity = document.getElementById('quick-freight-city');
+            const qKm = document.getElementById('quick-freight-km');
+
+            if (qMode) qMode.value = document.getElementById('freight-mode').value;
+            if (qCity) qCity.value = document.getElementById('freight-city').value;
+            if (qKm) qKm.value = document.getElementById('freight-km').value;
+
+            const qAsmOn = document.getElementById('quick-assembly-enabled');
+            const qAsmQty = document.getElementById('quick-assembly-qty');
+            const qDisOn = document.getElementById('quick-disassembly-enabled');
+            const qDisQty = document.getElementById('quick-disassembly-qty');
+
+            if (qAsmOn) qAsmOn.checked = document.getElementById('assembly-enabled').checked;
+            if (qAsmQty) qAsmQty.value = document.getElementById('assembly-qty').value;
+            if (qDisOn) qDisOn.checked = document.getElementById('disassembly-enabled').checked;
+            if (qDisQty) qDisQty.value = document.getElementById('disassembly-qty').value;
+        }
+
+        function syncFreightFromQuick(source) {
+            const qMode = document.getElementById('quick-freight-mode');
+            const qCity = document.getElementById('quick-freight-city');
+            const qKm = document.getElementById('quick-freight-km');
+
+            const mMode = document.getElementById('freight-mode');
+            const mCity = document.getElementById('freight-city');
+            const mKm = document.getElementById('freight-km');
+
+            if (qMode && mMode) mMode.value = qMode.value;
+            if (qCity && mCity) mCity.value = qCity.value;
+
+            if (source === 'city' && qCity && typeof cityDistances[qCity.value] === 'number') {
+                if (qKm) qKm.value = cityDistances[qCity.value];
+            }
+            if (qKm && mKm) mKm.value = qKm.value;
+
+            calculateFreight();
+        }
+
+        function syncServicesFromQuick() {
+            const qAsmOn = document.getElementById('quick-assembly-enabled');
+            const qAsmQty = document.getElementById('quick-assembly-qty');
+            const qDisOn = document.getElementById('quick-disassembly-enabled');
+            const qDisQty = document.getElementById('quick-disassembly-qty');
+
+            const mAsmOn = document.getElementById('assembly-enabled');
+            const mAsmQty = document.getElementById('assembly-qty');
+            const mDisOn = document.getElementById('disassembly-enabled');
+            const mDisQty = document.getElementById('disassembly-qty');
+
+            if (qAsmOn && mAsmOn) mAsmOn.checked = qAsmOn.checked;
+            if (qAsmQty && mAsmQty) mAsmQty.value = Math.max(1, parseInt(qAsmQty.value, 10) || 1);
+            if (qDisOn && mDisOn) mDisOn.checked = qDisOn.checked;
+            if (qDisQty && mDisQty) mDisQty.value = Math.max(1, parseInt(qDisQty.value, 10) || 1);
+
+            calculateServices();
+        }
+
+        function applyCityDistance() {
+            const cityEl = document.getElementById('freight-city');
+            const kmEl = document.getElementById('freight-km');
+            if (!cityEl || !kmEl) return;
+
+            const city = cityEl.value;
+            if (city && typeof cityDistances[city] === 'number') {
+                kmEl.value = cityDistances[city];
+            }
+            calculateFreight();
+        }
+
+        function calculateFreight() {
+            const mode = document.getElementById('freight-mode') ? document.getElementById('freight-mode').value : 'delivery';
+            const city = document.getElementById('freight-city') ? document.getElementById('freight-city').value : '';
+            const km = Math.max(0, parseFloat(document.getElementById('freight-km').value) || 0);
+            const rate = Math.max(0, parseFloat(document.getElementById('freight-rate').value) || 0);
+
+            const total = mode === 'pickup' ? 0 : km * rate;
+
+            const cityDisp = document.getElementById('freight-city-display');
+            const kmDisp = document.getElementById('freight-km-display');
+            const totalDisp = document.getElementById('freight-total-display');
+            const quickTotalDisp = document.getElementById('quick-freight-total');
+
+            if (cityDisp) cityDisp.textContent = mode === 'pickup' ? 'Retirada no local' : (city || 'Personalizada');
+            if (kmDisp) kmDisp.textContent = mode === 'pickup' ? '0 km' : `${km} km`;
+            if (totalDisp) totalDisp.textContent = formatMoney(total);
+            if (quickTotalDisp) quickTotalDisp.textContent = formatMoney(total);
+
+            syncQuickControlsFromMain();
+            recalculateCart();
+            return total;
+        }
+
+        function calculateServices() {
+            const assemblyOn = document.getElementById('assembly-enabled').checked;
+            const assemblyQty = Math.max(1, parseInt(document.getElementById('assembly-qty').value, 10) || 1);
+            const assemblyRate = Math.max(0, parseFloat(document.getElementById('assembly-rate').value) || 0);
+
+            const disassemblyOn = document.getElementById('disassembly-enabled').checked;
+            const disassemblyQty = Math.max(1, parseInt(document.getElementById('disassembly-qty').value, 10) || 1);
+            const disassemblyRate = Math.max(0, parseFloat(document.getElementById('disassembly-rate').value) || 0);
+
+            const assemblyTotal = assemblyOn ? assemblyQty * assemblyRate : 0;
+            const disassemblyTotal = disassemblyOn ? disassemblyQty * disassemblyRate : 0;
+            const total = assemblyTotal + disassemblyTotal;
+
+            const aDisp = document.getElementById('assembly-subtotal-display');
+            const dDisp = document.getElementById('disassembly-subtotal-display');
+            const tDisp = document.getElementById('services-total-display');
+            const quickTotalDisp = document.getElementById('quick-services-total');
+            const scopeBox = document.getElementById('summary-services-scope');
+
+            if (aDisp) aDisp.textContent = formatMoney(assemblyTotal);
+            if (dDisp) dDisp.textContent = formatMoney(disassemblyTotal);
+            if (tDisp) tDisp.textContent = formatMoney(total);
+            if (quickTotalDisp) quickTotalDisp.textContent = formatMoney(total);
+            if (scopeBox) scopeBox.classList.toggle('hidden', !assemblyOn && !disassemblyOn);
+
+            syncQuickControlsFromMain();
+            recalculateCart();
+            return total;
+        }
+
+        function calculateServices() {
+            const assemblyOn = document.getElementById('assembly-enabled').checked;
+            const assemblyQty = Math.max(1, parseInt(document.getElementById('assembly-qty').value, 10) || 1);
+            const assemblyRate = Math.max(0, parseFloat(document.getElementById('assembly-rate').value) || 0);
+
+            const disassemblyOn = document.getElementById('disassembly-enabled').checked;
+            const disassemblyQty = Math.max(1, parseInt(document.getElementById('disassembly-qty').value, 10) || 1);
+            const disassemblyRate = Math.max(0, parseFloat(document.getElementById('disassembly-rate').value) || 0);
+
+            const assemblyTotal = assemblyOn ? assemblyQty * assemblyRate : 0;
+            const disassemblyTotal = disassemblyOn ? disassemblyQty * disassemblyRate : 0;
+            const total = assemblyTotal + disassemblyTotal;
+
+            const aDisp = document.getElementById('assembly-subtotal-display');
+            const dDisp = document.getElementById('disassembly-subtotal-display');
+            const tDisp = document.getElementById('services-total-display');
+            const scopeBox = document.getElementById('summary-services-scope');
+
+            if (aDisp) aDisp.textContent = formatMoney(assemblyTotal);
+            if (dDisp) dDisp.textContent = formatMoney(disassemblyTotal);
+            if (tDisp) tDisp.textContent = formatMoney(total);
+            if (scopeBox) scopeBox.classList.toggle('hidden', !assemblyOn && !disassemblyOn);
+
+            recalculateCart();
+            return total;
+        }
+
+        function recalculateCart() {
+            const days = Math.max(1, parseInt(document.getElementById('rental-days').value, 10) || 1);
+            const volumeDisc = isVolumeDiscountActive();
+
+            const discountBadge = document.getElementById('volume-discount-badge');
+            const discountStatus = document.getElementById('volume-discount-status');
+            const discountMode = document.getElementById('discount-mode-select') ? document.getElementById('discount-mode-select').value : 'auto';
+
+            if (discountBadge && discountStatus) {
+                if (volumeDisc) {
+                    discountBadge.className = 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800';
+                    discountBadge.textContent = 'Com desconto';
+                    discountStatus.textContent = discountMode === 'with-discount'
+                        ? 'Tabela com desconto aplicada manualmente.'
+                        : 'Total de 70+ un. atingido: aplicando preço com desconto.';
+                } else {
+                    discountBadge.className = 'text-xs font-extrabold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700';
+                    discountBadge.textContent = 'Sem desconto';
+                    discountStatus.textContent = discountMode === 'no-discount'
+                        ? 'Tabela sem desconto aplicada manualmente.'
+                        : `Total atual: ${getTotalCartUnits()} un. (desconto automático em 70+ un.)`;
+                }
+            }
+
+            const tbody = document.getElementById('cart-table-body');
+            const itemIds = Object.keys(cart);
+            let totalQty = 0;
+            let productsSubtotal = 0;
+
+            if (!tbody) return;
+
+            if (itemIds.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="py-6 text-center text-slate-400">
+                            Nenhum item selecionado ainda. Vá para a aba <strong>2. Catálogo</strong> para adicionar itens.
+                        </td>
+                    </tr>
+                `;
+            } else {
+                tbody.innerHTML = itemIds.map((id) => {
+                    const prod = catalogItems.find((p) => p.id === id);
+                    const qty = cart[id] || 0;
+                    if (!prod || qty <= 0) return '';
+
+                    totalQty += qty;
+                    const unitPrice = getItemUnitPrice(prod, volumeDisc);
+                    const fullPrice = getItemUnitPrice(prod, false);
+                    const lineSubtotal = unitPrice * qty * days;
+                    productsSubtotal += lineSubtotal;
+
+                    const theme = getSegmentTheme(prod.segment);
+                    const segObj = catalogSegments.find((s) => s.id === prod.segment);
+                    const segName = segObj ? segObj.label : prod.segment;
+
+                    return `
+                        <tr class="${theme.rowBg} transition-colors">
+                            <td class="py-3 px-4">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="text-[11px] font-extrabold ${theme.code}">${prod.code}</span>
+                                    <span class="text-[10px] font-bold ${theme.badge} px-2 py-0.5 rounded-full">${segName}</span>
+                                </div>
+                                <span class="font-semibold text-slate-800 block mt-0.5">${prod.name}</span>
+                            </td>
+                            <td class="py-3 px-4 text-center">
+                                <div class="inline-flex items-center gap-2 border border-slate-200 rounded-xl px-2.5 py-1 bg-white no-print">
+                                    <button type="button" onclick="changeCartQty('${id}', -1)" class="font-bold text-slate-600 hover:text-slate-900 cursor-pointer">-</button>
+                                    <span class="font-bold text-slate-800 min-w-[16px]">${qty}</span>
+                                    <button type="button" onclick="changeCartQty('${id}', 1)" class="font-bold text-slate-600 hover:text-slate-900 cursor-pointer">+</button>
+                                </div>
+                                <span class="hidden print:inline font-bold">${qty}</span>
+                            </td>
+                            <td class="py-3 px-4 text-right text-slate-700">
+                                <span class="font-bold block">${formatMoney(unitPrice)}</span>
+                                ${volumeDisc && unitPrice !== fullPrice ? `<span class="text-[11px] line-through text-slate-400">${formatMoney(fullPrice)}</span>` : ''}
+                            </td>
+                            <td class="py-3 px-4 text-right font-bold text-slate-900">${formatMoney(lineSubtotal)}</td>
+                            <td class="py-3 px-4 text-center no-print">
+                                <button
+                                    type="button"
+                                    onclick="removeCartItem('${id}')"
+                                    class="text-xs font-bold text-rose-600 hover:text-rose-800 cursor-pointer"
+                                >
+                                    Remover
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            }
+
+            const freightMode = document.getElementById('freight-mode').value;
+            const freightCity = document.getElementById('freight-city').value;
+            const freightKm = Math.max(0, parseFloat(document.getElementById('freight-km').value) || 0);
+            const freightRate = Math.max(0, parseFloat(document.getElementById('freight-rate').value) || 0);
+            const freightTotal = freightMode === 'pickup' ? 0 : freightKm * freightRate;
+
+            const assemblyOn = document.getElementById('assembly-enabled').checked;
+            const assemblyQty = Math.max(1, parseInt(document.getElementById('assembly-qty').value, 10) || 1);
+            const assemblyRate = Math.max(0, parseFloat(document.getElementById('assembly-rate').value) || 0);
+
+            const disassemblyOn = document.getElementById('disassembly-enabled').checked;
+            const disassemblyQty = Math.max(1, parseInt(document.getElementById('disassembly-qty').value, 10) || 1);
+            const disassemblyRate = Math.max(0, parseFloat(document.getElementById('disassembly-rate').value) || 0);
+
+            const servicesTotal = (assemblyOn ? assemblyQty * assemblyRate : 0) + (disassemblyOn ? disassemblyQty * disassemblyRate : 0);
+            const grandTotal = productsSubtotal + freightTotal + servicesTotal;
+
+            document.getElementById('summary-items-count').textContent = `${totalQty} un. (${days} ${days === 1 ? 'diária' : 'diárias'})`;
+            document.getElementById('summary-freight-label').textContent = freightMode === 'pickup'
+                ? 'Retirada no local (R$ 0,00)'
+                : `${freightCity || 'Entrega'} — ${freightKm} km (${formatMoney(freightTotal)})`;
+
+            let serviceSummary = 'Não contratado (R$ 0,00)';
+            if (assemblyOn && disassemblyOn) {
+                serviceSummary = `Montagem (${assemblyQty}x) + Desmontagem (${disassemblyQty}x) — ${formatMoney(servicesTotal)}`;
+            } else if (assemblyOn) {
+                serviceSummary = `Apenas Montagem (${assemblyQty}x) — ${formatMoney(servicesTotal)}`;
+            } else if (disassemblyOn) {
+                serviceSummary = `Apenas Desmontagem (${disassemblyQty}x) — ${formatMoney(servicesTotal)}`;
+            }
+            document.getElementById('summary-services-label').textContent = serviceSummary;
+
+            document.getElementById('quote-items-total').textContent = formatMoney(productsSubtotal);
+            document.getElementById('quote-freight-total').textContent = formatMoney(freightTotal);
+            document.getElementById('quote-services-total').textContent = formatMoney(servicesTotal);
+            document.getElementById('quote-grand-total').textContent = formatMoney(grandTotal);
+        }
+
+        function buildServiceDescriptionForHistory() {
+            const assemblyOn = document.getElementById('assembly-enabled').checked;
+            const disassemblyOn = document.getElementById('disassembly-enabled').checked;
+            if (assemblyOn && disassemblyOn) return 'Montagem e Desmontagem';
+            if (assemblyOn) return 'Apenas Montagem';
+            if (disassemblyOn) return 'Apenas Desmontagem';
+            return 'Sem montagem/desmontagem';
+        }
+
+        function saveCurrentQuoteToHistory() {
+            const code = getCurrentQuoteCode();
+            const clientName = (document.getElementById('client-name').value || '').trim() || 'Cliente não informado';
+            const totalText = document.getElementById('quote-grand-total').textContent;
+            const nowStr = new Date().toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            quoteHistory.unshift({
+                code,
+                date: nowStr,
+                client: clientName,
+                services: buildServiceDescriptionForHistory(),
+                total: totalText
+            });
+
+            nextQuoteSeq += 1;
+            updateQuoteCodeDisplay();
+            renderHistoryTable();
+            return code;
+        }
+
+        function finalizeQuote() {
+            const code = saveCurrentQuoteToHistory();
+            showToast(`Orçamento ${code} finalizado e enviado para o histórico.`);
+            switchTab('history');
+        }
+
+        function openDeleteHistoryModal(code) {
+            const entry = quoteHistory.find((item) => item.code === code);
+            if (!entry) return;
+
+            pendingDeleteHistoryCode = code;
+            const descEl = document.getElementById('delete-history-description');
+            if (descEl) {
+                descEl.textContent = `Deseja realmente excluir o orçamento ${entry.code} (${entry.client} — ${entry.total}) do histórico?`;
+            }
+
+            const modal = document.getElementById('delete-history-modal');
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
+
+        function closeDeleteHistoryModal() {
+            pendingDeleteHistoryCode = null;
+            const modal = document.getElementById('delete-history-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+
+        function confirmDeleteHistoryItem() {
+            if (!pendingDeleteHistoryCode) return;
+            const removedCode = pendingDeleteHistoryCode;
+            quoteHistory = quoteHistory.filter((item) => item.code !== removedCode);
+            closeDeleteHistoryModal();
+            renderHistoryTable();
+            showToast(`Orçamento ${removedCode} excluído do histórico.`);
+        }
+
+        function renderHistoryTable() {
+            const tbody = document.getElementById('history-table-body');
+            if (!tbody) return;
+
+            if (quoteHistory.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="py-6 text-center text-slate-400">
+                            Nenhum orçamento finalizado ainda.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = quoteHistory.map((item) => `
+                <tr class="hover:bg-slate-50">
+                    <td class="py-3 px-4 font-extrabold text-vdaBlue">${item.code}</td>
+                    <td class="py-3 px-4 text-slate-600">${item.date}</td>
+                    <td class="py-3 px-4 font-semibold text-slate-800">${item.client}</td>
+                    <td class="py-3 px-4 text-slate-600">${item.services}</td>
+                    <td class="py-3 px-4 text-right font-extrabold text-vdaOrange">${item.total}</td>
+                    <td class="py-3 px-4 text-center no-print">
+                        <button
+                            type="button"
+                            onclick="openDeleteHistoryModal('${item.code}')"
+                            title="Excluir orçamento"
+                            class="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition cursor-pointer"
+                        >
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function sendWhatsAppQuote() {
+            const code = getCurrentQuoteCode();
+            const clientName = (document.getElementById('client-name').value || '').trim() || 'Cliente';
+            const rawPhone = (document.getElementById('client-phone').value || '').replace(/\D/g, '');
+            const eventDate = document.getElementById('event-date').value || 'A definir';
+            const days = Math.max(1, parseInt(document.getElementById('rental-days').value, 10) || 1);
+            const volumeDisc = isVolumeDiscountActive();
+
+            const lines = [
+                `*Vai de Aluguel — Orçamento ${code}*`,
+                `Cliente: ${clientName}`,
+                `Data do evento: ${eventDate} (${days} ${days === 1 ? 'diária' : 'diárias'})`,
+                ''
+            ];
+
+            Object.keys(cart).forEach((id) => {
+                const prod = catalogItems.find((p) => p.id === id);
+                const qty = cart[id] || 0;
+                if (!prod || qty <= 0) return;
+                const unit = getItemUnitPrice(prod, volumeDisc);
+                lines.push(`• ${qty}x ${prod.name} (${prod.code}) — ${formatMoney(unit * qty * days)}`);
+            });
+
+            lines.push('');
+            lines.push(`Subtotal Itens: ${document.getElementById('quote-items-total').textContent}`);
+            lines.push(`Frete: ${document.getElementById('quote-freight-total').textContent}`);
+            lines.push(`Montagem / Desmontagem: ${document.getElementById('quote-services-total').textContent}`);
+            lines.push(`*Total Geral: ${document.getElementById('quote-grand-total').textContent}*`);
+
+            if (document.getElementById('assembly-enabled').checked || document.getElementById('disassembly-enabled').checked) {
+                lines.push('');
+                lines.push('_Escopo do serviço: montagem, posicionamento e organização conforme orientação do cliente/organizador exclusivamente dos itens locados com a Vai de Aluguel._');
+            }
+
+            const phonePrefix = rawPhone.length >= 10
+                ? (rawPhone.startsWith('55') ? rawPhone : `55${rawPhone}`)
+                : '';
+            const url = `https://wa.me/${phonePrefix}?text=${encodeURIComponent(lines.join('\n'))}`;
+            window.open(url, '_blank', 'noopener,noreferrer');
+            showToast(`Abrindo WhatsApp com o orçamento ${code}...`);
+        }
+
+        function buildLogoPngDataUrl() {
+            return new Promise((resolve) => {
+                try {
+                    const svgEl = document.getElementById('vda-brand-logo-svg');
+                    if (!svgEl) {
+                        resolve(null);
+                        return;
+                    }
+
+                    const cloned = svgEl.cloneNode(true);
+                    cloned.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+                    cloned.setAttribute('width', '680');
+                    cloned.setAttribute('height', '430');
+
+                    const serialized = new XMLSerializer().serializeToString(cloned);
+                    const svgBlob = new Blob([serialized], { type: 'image/svg+xml;charset=utf-8' });
+                    const blobUrl = URL.createObjectURL(svgBlob);
+                    const img = new Image();
+
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 680;
+                        canvas.height = 430;
+                        const ctx = canvas.getContext('2d');
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillRect(0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                        URL.revokeObjectURL(blobUrl);
+                        resolve(canvas.toDataURL('image/png'));
+                    };
+
+                    img.onerror = () => {
+                        URL.revokeObjectURL(blobUrl);
+                        resolve(null);
+                    };
+
+                    img.src = blobUrl;
+                } catch (e) {
+                    resolve(null);
+                }
+            });
+        }
+
+        async function generatePDFQuote() {
+            try {
+                const code = getCurrentQuoteCode();
+                const jsPDFRef = window.jspdf && window.jspdf.jsPDF;
+                if (!jsPDFRef) {
+                    showToast('Biblioteca de PDF indisponível no momento.');
+                    return;
+                }
+
+                const doc = new jsPDFRef();
+                const logoDataUrl = await buildLogoPngDataUrl();
+                const clientName = (document.getElementById('client-name').value || '').trim() || 'Cliente não informado';
+                const clientPhone = (document.getElementById('client-phone').value || '').trim() || '-';
+                const eventDate = document.getElementById('event-date').value || '-';
+
+                if (logoDataUrl) {
+                    doc.addImage(logoDataUrl, 'PNG', 148, 12, 48, 30.35);
+                }
+
+                doc.setFontSize(18);
+                doc.setTextColor(5, 91, 117);
+                doc.text('Vai de Aluguel', 14, 20);
+
+                doc.setFontSize(11);
+                doc.setTextColor(60, 60, 60);
+                doc.text(`Orçamento: ${code}`, 14, 30);
+                doc.text(`Cliente: ${clientName} | WhatsApp: ${clientPhone}`, 14, 37);
+                doc.text(`Data do Evento: ${eventDate}`, 14, 44);
+
+                let y = 56;
+                doc.setFontSize(10);
+                doc.setTextColor(30, 30, 30);
+                const days = Math.max(1, parseInt(document.getElementById('rental-days').value, 10) || 1);
+                const volumeDisc = isVolumeDiscountActive();
+
+                Object.keys(cart).forEach((id) => {
+                    const prod = catalogItems.find((p) => p.id === id);
+                    const qty = cart[id] || 0;
+                    if (!prod || qty <= 0) return;
+                    const unit = getItemUnitPrice(prod, volumeDisc);
+                    const sub = unit * qty * days;
+                    if (y > 260) {
+                        doc.addPage();
+                        y = 20;
+                    }
+                    doc.text(`${prod.code} - ${prod.name} (${qty}x) = ${formatMoney(sub)}`, 14, y);
+                    y += 7;
+                });
+
+                y += 4;
+                doc.text(`Subtotal Itens: ${document.getElementById('quote-items-total').textContent}`, 14, y);
+                y += 7;
+                doc.text(`Frete: ${document.getElementById('quote-freight-total').textContent}`, 14, y);
+                y += 7;
+                doc.text(`Montagem / Desmontagem: ${document.getElementById('quote-services-total').textContent}`, 14, y);
+                y += 8;
+                doc.setFontSize(13);
+                doc.setTextColor(255, 87, 34);
+                doc.text(`Total Geral: ${document.getElementById('quote-grand-total').textContent}`, 14, y);
+
+                if (document.getElementById('assembly-enabled').checked || document.getElementById('disassembly-enabled').checked) {
+                    y += 10;
+                    doc.setFontSize(9);
+                    doc.setTextColor(90, 90, 90);
+                    const scopeLines = doc.splitTextToSize(
+                        'Escopo do serviço: montagem, posicionamento e organização conforme orientação do cliente/organizador exclusivamente dos itens locados com a Vai de Aluguel.',
+                        180
+                    );
+                    doc.text(scopeLines, 14, y);
+                }
+
+                doc.save(`Orcamento_${code.replace('#', '')}.pdf`);
+                showToast(`PDF ${code} gerado.`);
+            } catch (err) {
+                showToast('Não foi possível gerar o PDF.');
+            }
+        }
+
+        function openResetModal() {
+            const modal = document.getElementById('reset-confirm-modal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeResetModal() {
+            const modal = document.getElementById('reset-confirm-modal');
+            if (!modal) return;
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function executeFullReset() {
+            cart = {};
+            selectedSegment = 'all';
+
+            document.getElementById('client-name').value = '';
+            document.getElementById('client-phone').value = '';
+            document.getElementById('event-date').value = '';
+            document.getElementById('rental-days').value = '1';
+            document.getElementById('price-tier-select').value = 'cpf';
+            document.getElementById('discount-mode-select').value = 'auto';
+            document.getElementById('client-notes').value = '';
+            document.getElementById('catalog-search').value = '';
+
+            document.getElementById('freight-mode').value = 'delivery';
+            document.getElementById('freight-city').value = '';
+            document.getElementById('freight-km').value = '0';
+            document.getElementById('freight-rate').value = '2.50';
+
+            document.getElementById('assembly-enabled').checked = false;
+            document.getElementById('assembly-qty').value = '1';
+            document.getElementById('assembly-rate').value = '150.00';
+
+            document.getElementById('disassembly-enabled').checked = false;
+            document.getElementById('disassembly-qty').value = '1';
+            document.getElementById('disassembly-rate').value = '150.00';
+
+            closeResetModal();
+            updateQuoteCodeDisplay();
+            calculateFreight();
+            calculateServices();
+            renderSegmentsBar();
+            renderCatalog();
+            switchTab('quote');
+            showToast('Orçamento limpo com sucesso.');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            updateQuoteCodeDisplay();
+            renderSegmentsBar();
+            renderCatalog();
+            calculateFreight();
+            calculateServices();
+            renderHistoryTable();
+        });
+    </script>
+</body>
+</html>
